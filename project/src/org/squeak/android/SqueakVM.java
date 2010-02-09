@@ -58,16 +58,23 @@ public class SqueakVM {
     	interpret();
     	System.out.println("Finished");
     }
+    
+    /* VM callbacks */
+    public void invalidate(int left, int top, int right, int bottom) {
+    	/* System.out.println("Invalidating: (" + left + "," + top + " -- " + right + "," + bottom + ")"); */
+    	view.invalidate(left, top, right, bottom);
+    }
 
     /* PRELOAD functions */
     public native int allocate(int heap);
     public native int loadMemRegion(byte[] buf, int ofs, int len);
+    public native int setLogLevel(int logLevel);
 
     /* Main entry points */
     public native int loadImageHeap(String imageName, int heap);
     public native int sendEvent(int type, int stamp, int arg3, int arg4,
 				int arg5, int arg6, int arg7, int arg8);
-    public native int updateDisplay(int bits[], int w, int h, int d, int dirty[]);
+    public native int updateDisplay(int bits[], int w, int h, int d, int l, int t, int r, int b);
     public native int interpret();
 
     /* Load the SqueakVM module */
