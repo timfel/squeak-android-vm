@@ -17,14 +17,30 @@
 
 extern struct VirtualMachine *interpreterProxy;
 
+/* Static references to callback instances during interpret() */
+static JNIEnv *SqueakEnv = NULL;
+static jobject *SqueakVM = NULL;
+static jmethodID sqInvalidate = NULL;
+
 static unsigned char *sqMemory = NULL;
 static int sqHeaderSize = 0;
 
-int dprintf(const char *fmt, ...) {
+/* Higher values introduce more logging:
+   1 - CRITICAL failures (out of memory etc)
+   3 - ERRORS (opening resources etc)
+   4 - WARNINGS (only one-time warnings)
+   5 - NOTIFICATIONS (one-time)
+   7 - REPEAT NOTIFICATIONS
+   9 - TRACING
+ */
+static int vmLogLevel = 5;
+int dprintf(int logLvl, const char *fmt, ...) {
   int result;
   va_list args;
   va_start(args, fmt);
-  result = __android_log_vprint(ANDROID_LOG_INFO, "SqueakVM", fmt, args);
+  if(logLvl <= vmLogLevel) {
+	result = __android_log_vprint(ANDROID_LOG_INFO, "SqueakVM", fmt, args);
+  }
   va_end(args);
   return result;
 }
@@ -82,7 +98,7 @@ Java_org_squeak_android_SqueakVM_loadImageHeap(JNIEnv *env, jobject self,
     sqHeaderSize = byteSwapped(longAt(sqMemory+4));
   }
   initTimer();
-  dprintf("loadImageHeap: headerSize = %d\n", sqHeaderSize);
+  dprintf(4, "loadImageHeap: headerSize = %d\n", sqHeaderSize);
   //imageFile = sqImageFileOpen(imageName, "rb");
   readImageFromFileHeapSizeStartingAt(0, heapSize-sqHeaderSize, 0);
   //sqImageFileClose(imageFile);
@@ -94,8 +110,20 @@ int
 Java_org_squeak_android_SqueakVM_allocate(JNIEnv *env, jobject self, 
 					  int heapSize) {
   sqMemory = malloc(heapSize);
-  dprintf("allocate: %d bytes %x result\n", heapSize, sqMemory);
+  dprintf(4, "allocate: %d bytes %x result\n", heapSize, sqMemory);
+  /* Find the callBack method ID */
+  jclass cls = (*env)->GetObjectClass(env, self);
+  sqInvalidate = (*env)->GetMethodID(env, cls, "invalidate", "(IIII)V");
+  dprintf(2, "invalidate: FAILED TO LOOK UP SqueakVM.invalidate(int, int, int, int)");
   return (int)sqMemory;
+}
+
+int
+Java_org_squeak_android_SqueakVM_setLogLevel(JNIEnv *env, jobject self, 
+					  int logLevel) {
+  dprintf(4, "logLevel: %d\n", logLevel);
+  vmLogLevel = logLevel;
+  return vmLogLevel;
 }
 
 int
@@ -127,18 +155,23 @@ Java_org_squeak_android_SqueakVM_sendEvent(JNIEnv *env, jobject self, int
 }
 
 int 
-Java_org_squeak_android_SqueakVM_interpret(JNIEnv *env, jobject self) {
-  dprintf("Interpret Enter");
+Java_org_squeak_android_SqueakVM_interpret(JNIEnv *env, jobject jsqueak) {
+  JNIEnv *oldEnv = SqueakEnv;
+  jobject *oldSqueak = SqueakVM;
+  dprintf(7, "Interpret Enter");
+  SqueakEnv = env;
+  SqueakVM = jsqueak;
   interpret();
-  dprintf("Interpret Leave");
+  SqueakEnv = oldEnv;
+  SqueakVM = oldSqueak;
+  dprintf(7, "Interpret Leave");
 }
 
 int 
 Java_org_squeak_android_SqueakVM_updateDisplay(JNIEnv *env, jobject self,
 					       jintArray bits, int w, int h,
-					       int d, jintArray dirty) {
-  // xxxx: missing type check
-  int rect[4] = {0, 0, 0, 0};
+					       int d, int left, int top, int right, int bottom) {
+  int row;
   sqInt formObj = interpreterProxy->displayObject();
   sqInt formBits = interpreterProxy->fetchPointerofObject(0, formObj);
   sqInt width = interpreterProxy->fetchIntegerofObject(1, formObj);
@@ -147,19 +180,19 @@ Java_org_squeak_android_SqueakVM_updateDisplay(JNIEnv *env, jobject self,
   int *dispBits = interpreterProxy->firstIndexableField(formBits);
 
   if(depth != 32) {
-    dprintf("updateDisplay: Display depth %d\n", depth);
+    dprintf(4, "updateDisplay: Display depth %d\n", depth);
     return 0;
   }
   if(width != w) {
-    dprintf("updateDisplay: Display width is %d (expected %d)\n", width, w);
+    dprintf(4, "updateDisplay: Display width is %d (expected %d)\n", width, w);
   }
   if(height != h) {
-    dprintf("updateDisplay: Display width is %d (expected %d)\n", height, h);
+    dprintf(4, "updateDisplay: Display width is %d (expected %d)\n", height, h);
   }
-  (*env)->SetIntArrayRegion(env, bits, 0, width*height, dispBits);
-  rect[2] = width;
-  rect[3] = height;
-  (*env)->SetIntArrayRegion(env, dirty, 0, 4, rect);
+  for(row = top; row < bottom; row++) {
+  	int ofs = width*row+left;
+  	(*env)->SetIntArrayRegion(env, bits, ofs, right-left, dispBits+ofs);
+  }
   return 1;
 }
 
@@ -181,7 +214,7 @@ squeakFileOffsetType sqImageFilePosition(sqImageFile h) {
 
 size_t sqImageFileRead(void *ptr, size_t sz, size_t count, sqImageFile h) {
   int nbytes = count * sz;
-  dprintf("sqImageFileRead: %d bytes\n", nbytes);
+  dprintf(7, "sqImageFileRead: %d bytes\n", nbytes);
   if(nbytes < 256) {
     memcpy(ptr, sqMemory+imgFilePos, nbytes);
   }
@@ -236,7 +269,7 @@ int sq2uxPath(char* sqString, int sqLength, char* uxString, int uxLength, int te
 
 int ux2sqPath(char* uxString, int uxLength, char* sqString, int sqLength, int term) {
   int count = uxLength < sqLength ? uxLength : sqLength;
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   memcpy(sqString, uxString, count-term);
   if(term) sqString[count] = '\0';
   return count;
@@ -264,7 +297,7 @@ sqInt dir_Create(char *pathString, sqInt pathStringLength) {
      directory is created relative to the cwd. */
   char name[MAXPATHLEN+1];
   int i;
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   if (pathStringLength >= MAXPATHLEN) return false;
   if (!sq2uxPath(pathString, pathStringLength, name, MAXPATHLEN, 1))
     return false;
@@ -275,7 +308,7 @@ sqInt dir_Delete(char *pathString, sqInt pathStringLength) {
   /* Delete the existing directory with the given path. */
   char name[MAXPATHLEN+1];
   int i;
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   if (pathStringLength >= MAXPATHLEN) return false;
   if (!sq2uxPath(pathString, pathStringLength, name, MAXPATHLEN, 1))
     return false;
@@ -293,7 +326,7 @@ static int maybeOpenDir(char *unixPath) {
      pointer from last time.  Otherwise close the previous directory,
      open the new one, and save its name.  Return true if the operation
      was successful, false if not. */
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   if (!lastPathValid || strcmp(lastPath, unixPath)) {
     /* invalidate the old, open the new */
     if (lastPathValid) closedir(openDir);
@@ -325,7 +358,7 @@ sqInt dir_Lookup(char *pathString, sqInt pathStringLength, sqInt index,
   char unixPath[MAXPATHLEN+1];
   struct stat statBuf;
 
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
 
   /* default return values */
   *name             = 0;
@@ -343,10 +376,10 @@ sqInt dir_Lookup(char *pathString, sqInt pathStringLength, sqInt index,
   if (!maybeOpenDir(unixPath)) return BAD_PATH;
 
   if (++lastIndex == index) {
-    dprintf("dir cache hit\n");
+    dprintf(7, "dir cache hit\n");
     index= 1; /* fake that the dir is rewound and we want the first entry */
   } else {
-    dprintf("dir cache miss\n");
+    dprintf(7, "dir cache miss\n");
     rewinddir(openDir);	/* really rewind it, and read to the index */
     lastIndex= index;
   }
@@ -397,19 +430,19 @@ sqInt dir_Lookup(char *pathString, sqInt pathStringLength, sqInt index,
 
 
 sqInt dir_PathToWorkingDir(char *pathName, sqInt pathNameMax) {
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
 sqInt dir_SetMacFileTypeAndCreator(char *filename, sqInt filenameSize, 
 				   char *fType, char *fCreator) {
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 1;
 }
 
 sqInt dir_GetMacFileTypeAndCreator(char *filename, sqInt filenameSize, 
 				   char *fType, char *fCreator) {
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 1;
 }
 
@@ -467,7 +500,7 @@ sqInt imageNameGetLength(sqInt sqImageNameIndex, sqInt length){
 }
 
 sqInt imageNamePutLength(sqInt sqImageNameIndex, sqInt length){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
@@ -476,12 +509,12 @@ sqInt imageNameSize(void){
 }
 
 sqInt vmPathSize(void){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
 sqInt vmPathGetLength(sqInt sqVMPathIndex, sqInt length){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
@@ -489,23 +522,23 @@ sqInt vmPathGetLength(sqInt sqVMPathIndex, sqInt length){
 
 /* Display, mouse, keyboard, time. */
 sqInt ioBeep(void){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
 sqInt ioExit(void){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
 sqInt ioFormPrint(sqInt bitsAddr, sqInt width, sqInt height, sqInt depth,
 		  double hScale, double vScale, sqInt landscapeFlag){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
 sqInt ioSetFullScreen(sqInt fullScreen){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
@@ -519,70 +552,73 @@ sqInt ioScreenSize(void){
 }
 
 sqInt ioScreenDepth(void){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 32;
 }
 
 sqInt ioSetCursor(sqInt cursorBitsIndex, sqInt offsetX, sqInt offsetY){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
 sqInt ioSetCursorWithMask(sqInt cursorBitsIndex, sqInt cursorMaskIndex, sqInt offsetX, sqInt offsetY){
-  //dprintf("%s\n", __FUNCTION__);
+  //dprintf(7, "%s\n", __FUNCTION__);
   return 1;
 }
 
 sqInt ioSetCursorARGB(sqInt cursorBitsIndex, sqInt offsetX, sqInt offsetY){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
 sqInt ioForceDisplayUpdate(void){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 1;
 }
 
 sqInt ioShowDisplay(sqInt dispBitsIndex, sqInt width, sqInt height, sqInt depth,
 		    sqInt affectedL, sqInt affectedR, sqInt affectedT, sqInt affectedB){
-  dprintf("%s\n", __FUNCTION__);
+  if(sqInvalidate && SqueakEnv && SqueakVM) {
+  	dprintf(7, "SqueakVM.invalidate(): %d, %d -- %d, %d", affectedL, affectedT, affectedR, affectedB);
+  	(*SqueakEnv)->CallVoidMethod(SqueakEnv, SqueakVM, sqInvalidate, affectedL, affectedT, affectedR, affectedB);
+  }
   return 1;
 }
 
 sqInt ioHasDisplayDepth(sqInt depth){
-  dprintf("%s: %d\n", __FUNCTION__, depth);
+  dprintf(7, "%s: %d\n", __FUNCTION__, depth);
   return depth == 32;
 }
 
 sqInt ioSetDisplayMode(sqInt width, sqInt height, sqInt depth, sqInt fullscreenFlag){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
 // sqInt ioSetInputSemaphore(sqInt semaIndex) { return 0; }
 // sqInt ioGetNextEvent(sqInputEvent *evt) { return 0; }
 sqInt ioGetButtonState(void){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
 sqInt ioGetKeystroke(void){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
 sqInt ioMousePoint(void){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
 sqInt ioPeekKeystroke(void){
-  dprintf("%s\n", __FUNCTION__);
+  dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
 sqInt ioProcessEvents(void){
-  // dprintf("%s\n", __FUNCTION__);
+  // dprintf(7, "%s\n", __FUNCTION__);
   return 0;
 }
 
