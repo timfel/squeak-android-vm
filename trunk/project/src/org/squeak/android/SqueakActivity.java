@@ -6,6 +6,7 @@ import android.os.Bundle;
 import org.squeak.android.SqueakVM;
 import org.squeak.android.SqueakView;
 
+
 public class SqueakActivity extends Activity {
 	SqueakVM vm;
 	SqueakView view;
@@ -18,6 +19,7 @@ public class SqueakActivity extends Activity {
     	/* stupid setup dance but I'm not sure who is going to need what here */
     	vm = new SqueakVM();
     	vm.context = this;
+    	vm.setLogLevel(5);
     	view = new SqueakView(this);
     	view.vm = vm;
     	vm.view = view;
@@ -25,5 +27,10 @@ public class SqueakActivity extends Activity {
     	vm.loadImage("android.image", 16*1024*1024);
     	super.onCreate(savedInstanceState);
         setContentView(view);
+        /* Let's see if we can display the soft input */
+        view.setFocusable(true);
+        view.requestFocus();
+
     }
+
 }
