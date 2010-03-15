@@ -635,9 +635,6 @@ EXPORT(sqInt) primitiveResolverStartNameLookup(void) {
 }
 
 EXPORT(sqInt) primitiveResolverStatus(void) {
-	dprintf(1, "ENTER: primitiveResolverStatus");
-	exit(0);
-	return null;
 	sqInt status;
 	sqInt _return_value;
 
