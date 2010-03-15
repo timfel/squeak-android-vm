@@ -19,7 +19,8 @@ include $(CLEAR_VARS)
 LOCAL_MODULE    := squeakvm
 LOCAL_SRC_FILES := squeakvm.c interp.c sqNamedPrims.c sqVirtualMachine.c \
 	B2DPlugin.c BitBltPlugin.c FilePlugin.c ZipPlugin.c LargeIntegers.c \
-	MiscPrimitivePlugin.c sqFilePluginBasicPrims.c sqExternalPrims.c
+	MiscPrimitivePlugin.c SocketPlugin.c sqFilePluginBasicPrims.c sqExternalPrims.c \
+	aio.c sqUnixSocket.c
 
 LOCAL_CFLAGS += -DSQUEAK_BUILTIN_PLUGIN -O2
 LOCAL_LDLIBS += -llog
