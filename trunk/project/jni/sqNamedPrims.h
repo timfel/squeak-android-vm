@@ -10,6 +10,7 @@ extern sqExport ZipPlugin_exports[];
 extern sqExport FilePlugin_exports[];
 extern sqExport LargeIntegers_exports[];
 extern sqExport MiscPrimitivePlugin_exports[];
+extern sqExport SocketPlugin_exports[];
 
 sqExport *pluginExports[] = {
 	vm_exports,
@@ -19,5 +20,6 @@ sqExport *pluginExports[] = {
 	FilePlugin_exports,
 	LargeIntegers_exports,
 	MiscPrimitivePlugin_exports,
+	SocketPlugin_exports,
 	NULL
 };
