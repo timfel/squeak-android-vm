@@ -1,5 +1,4 @@
 #summary unordered list of Hints/ Tricks/ Suggestions on building the squeakvm for android
-=Hints/ Tricks/ Suggestions on building the squeakvm for android=
 
 *make sure that you copy the correct libsqueakvm.so* <br/>
 _android_ndk_xyz/apps/squeakvm/project/libs/armeabi/libsqueakvm.sq_ to
