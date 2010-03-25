@@ -1,0 +1,14 @@
+=Hints/ Tricks/ Suggestions on building the squeakvm for android=
+
+*make sure that you copy the correct libsqueakvm.so* <br/>
+_android_ndk_xyz/apps/squeakvm/project/libs/armeabi/libsqueakvm.sq_ to
+the right location in your eclipse-workspace _workspace/SqueakVM/lbs/armeabi/_. 
+The size of that .so should be about 370 kb. During compilation there will be produced a libsqueakvm.so into a different folder ("out") - that file is much bigger and it won't work!
+
+*refresh the eclipse-workspace after copying libsqueakvm.so* <br/>
+If you want to make sure that eclipse recognizes the new version of the shared library, clean the project.
+
+*I had serious problems with version r3 of the ndk* <br/>
+I encountered SIGSEGVs in various JNI-calls. With the NDK r1 everything works fine. 
+Thread in the android-ndk-group:
+http://groups.google.com/group/android-ndk/browse_thread/thread/26b518a374bf4579/ae4d97d1759e349d
