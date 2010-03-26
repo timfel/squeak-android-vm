@@ -3,6 +3,7 @@
 #include "sq.h"
 #include <stdarg.h>
 #include <android/log.h>
+#include <sqaio.h>
 
 #include <dirent.h>
 #include <time.h>
@@ -98,6 +99,7 @@ Java_org_squeak_android_SqueakVM_loadImageHeap(JNIEnv *env, jobject self,
     sqHeaderSize = byteSwapped(longAt(sqMemory+4));
   }
   initTimer();
+  aioInit();
   dprintf(4, "loadImageHeap: headerSize = %d\n", sqHeaderSize);
   //imageFile = sqImageFileOpen(imageName, "rb");
   readImageFromFileHeapSizeStartingAt(0, heapSize-sqHeaderSize, 0);

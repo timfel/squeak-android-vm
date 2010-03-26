@@ -1,4 +1,3 @@
-/* sqUnixSocket.c -- Unix socket support
  * 
  *   Copyright (C) 1996-2007 by Ian Piumarta and other authors/contributors
  *                              listed elsewhere in this file.
@@ -492,6 +491,7 @@ static void closeHandler(int fd, void *data, int flags)
 
 sqInt sqNetworkInit(sqInt resolverSemaIndex)
 {
+  aioInit();
   if (0 != thisNetSession)
     return 0;  /* already initialised */
   gethostname(localHostName, MAXHOSTNAMELEN);
