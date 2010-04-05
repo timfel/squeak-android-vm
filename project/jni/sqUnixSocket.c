@@ -1,3 +1,4 @@
+/* sqUnixSocket.c -- Unix socket support
  * 
  *   Copyright (C) 1996-2007 by Ian Piumarta and other authors/contributors
  *                              listed elsewhere in this file.
