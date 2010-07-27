@@ -1,4 +1,4 @@
-#Using VNC with squeak on the Device Emulator
+#summary Using VNC with squeak on the Device Emulator
 
 = VNC Configuration =
 
