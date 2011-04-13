@@ -17,3 +17,5 @@ _Update_: r3 uses GCC 4.4.0 by default (see docs/CHANGES.TXT) but comes with a t
 export NDK_TOOLCHAIN=arm-eabi-4.2.1
 }}}
 By using this elder version of GCC i did not encounter any SIGSEGV
+
+_Update_: Release Version 5 of the NDK does not contain the GCC 4.2.1 Toolchain, so you should stay with version r3. R3 was added in the download-section
